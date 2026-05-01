@@ -1,0 +1,24 @@
+@import "tailwindcss";
+
+:root {
+  --jms-indigo: #1a237e;
+  --jms-gold: #c9a227;
+}
+
+html,
+body {
+  height: 100%;
+}
+
+body {
+  margin: 0;
+  font-family: system-ui, "Segoe UI", Roboto, sans-serif;
+  background: radial-gradient(1200px 600px at 20% 10%, rgba(26, 35, 126, 0.12), transparent 60%),
+    radial-gradient(900px 500px at 80% 30%, rgba(201, 162, 39, 0.10), transparent 55%),
+    #ffffff;
+  color: rgb(17 24 39);
+}
+
+#root {
+  min-height: 100%;
+}
