@@ -25,7 +25,6 @@
   },
   "devDependencies": {
     "@eslint/js": "^10.0.1",
-    "@rolldown/binding-win32-x64-msvc": "^1.0.0-rc.17",
     "@tailwindcss/cli": "^4.2.4",
     "@tailwindcss/vite": "^4.2.4",
     "@types/node": "^24.12.2",
