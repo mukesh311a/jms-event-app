@@ -7,7 +7,10 @@ import type {
   RegistrationRecord,
 } from './types'
 
-const API_BASE_URL = (import.meta.env.VITE_API_BASE_URL as string | undefined)?.trim() || ''
+const DEFAULT_API_BASE_URL =
+  'https://script.google.com/macros/s/AKfycbxtLRYEm9pFnAmHF68E_3E8AYloCTxkoIfa8qxUuO5bLXBS_2-9WMgCw6pILKqA7rXYzA/exec'
+const API_BASE_URL =
+  (import.meta.env.VITE_API_BASE_URL as string | undefined)?.trim() || DEFAULT_API_BASE_URL
 
 function assertConfigured() {
   if (!API_BASE_URL) {

@@ -1,7 +1,7 @@
 import { useEffect, useMemo, useState } from 'react'
 import { Html5Qrcode } from 'html5-qrcode'
 
-import { getAdminDashboard, getRegistrationByQr, recordScanByQr, setMemberAttendance } from '../lib/api'
+import { getAdminDashboard, getRegistration, getRegistrationByQr, listRegistrations, recordScanByQr, setMemberAttendance } from '../lib/api'
 import type { FamilyMemberRecord, RegistrationRecord } from '../lib/types'
 import { Button, Card, CardBody, Container, Divider, H1, H2, Input, Label } from '../components/ui'
 
@@ -67,6 +67,7 @@ export function AdminPage() {
     rows: [],
   })
   const [selectedRegistrationId, setSelectedRegistrationId] = useState('')
+  const [manualLookup, setManualLookup] = useState('')
 
   const canUseAdmin = useMemo(() => adminPin.trim().length > 0, [adminPin])
   const selected = useMemo(
@@ -81,15 +82,75 @@ export function AdminPage() {
       setListState((s) => ({ ...s, loading: true, error: '' }))
       try {
         const res = await getAdminDashboard(adminPin)
-        if (!res.ok) throw new Error(res.error)
+        if (res.ok) {
+          if (cancelled) return
+          setListState({
+            loading: false,
+            error: '',
+            rows: res.registrations,
+          })
+          if (res.registrations.length && !selectedRegistrationId) {
+            setSelectedRegistrationId(res.registrations[0].registration.registrationId)
+          }
+          return
+        }
+
+        // Fallback for older backend deployments that don't yet support adminDashboard action.
+        const base = await listRegistrations(adminPin)
+        if (!base.ok) throw new Error(base.error)
+        const rows: AdminDashboardItem[] = []
+        for (const item of base.registrations.slice(0, 60)) {
+          const detail = await getRegistration(item.registrationId)
+          if (!detail.ok) continue
+          const family = detail.family || []
+          const donations = detail.donations || []
+          const arrived = family.filter((m) => String(m.checkInStatus) === 'Arrived').length
+          rows.push({
+            registration: {
+              registrationId: detail.registration.registrationId,
+              createdAt: detail.registration.createdAt,
+              source: detail.registration.source,
+              primaryName: detail.registration.primaryName,
+              primaryMobile: detail.registration.primaryMobile,
+              primaryEmail: detail.registration.primaryEmail,
+              address: detail.registration.address,
+              city: detail.registration.city,
+              profession: detail.registration.profession,
+              designation: detail.registration.designation,
+              wantsDonation: detail.registration.wantsDonation,
+              donationAmountIntent: detail.registration.donationAmountIntent,
+              status: detail.registration.status,
+            },
+            family: family.map((m) => ({
+              memberId: m.memberId,
+              serialNo: m.serialNo,
+              memberName: m.memberName,
+              relation: m.relation,
+              age: m.age,
+              gender: m.gender,
+              mobile: m.mobile,
+              profession: m.profession,
+              designation: m.designation,
+              checkInStatus: m.checkInStatus,
+            })),
+            donations: donations.map((d) => ({
+              donationId: d.donationId,
+              paymentTime: d.paymentTime,
+              amountPaid: d.amountPaid,
+              paymentReferenceNo: d.paymentReferenceNo,
+              paymentSnapshotUrl: d.paymentSnapshotUrl,
+            })),
+            summary: {
+              totalFamilyMembers: family.length,
+              arrivedFamilyMembers: arrived,
+              hasPaymentProof: donations.some((d) => Boolean(d.paymentSnapshotUrl)),
+            },
+          })
+        }
         if (cancelled) return
-        setListState({
-          loading: false,
-          error: '',
-          rows: res.registrations,
-        })
-        if (res.registrations.length && !selectedRegistrationId) {
-          setSelectedRegistrationId(res.registrations[0].registration.registrationId)
+        setListState({ loading: false, error: '', rows })
+        if (rows.length && !selectedRegistrationId) {
+          setSelectedRegistrationId(rows[0].registration.registrationId)
         }
       } catch (e) {
         if (cancelled) return
@@ -124,11 +185,7 @@ export function AdminPage() {
         async (decodedText) => {
           await qr.stop()
           await qr.clear()
-          const marked = await recordScanByQr({ adminPin, qr: decodedText })
-          if (!marked.ok) {
-            setScanState({ kind: 'error', message: marked.error })
-            return
-          }
+          await recordScanByQr({ adminPin, qr: decodedText })
           const res = await getRegistrationByQr(decodedText)
           if (!res.ok) {
             setScanState({ kind: 'error', message: res.error })
@@ -141,6 +198,17 @@ export function AdminPage() {
     } catch (e) {
       setScanState({ kind: 'error', message: String((e as Error)?.message || e) })
     }
+  }
+
+  async function manualOpen() {
+    const id = manualLookup.trim()
+    if (!id) return
+    const res = await getRegistration(id)
+    if (!res.ok) {
+      setScanState({ kind: 'error', message: res.error })
+      return
+    }
+    setScanState({ kind: 'loaded', registration: res.registration, family: res.family })
   }
 
   async function mark(memberId: string, status: 'Arrived' | 'Not Arrived') {
@@ -206,6 +274,16 @@ export function AdminPage() {
                   </Button>
                   <Button type="button" tone="ghost" onClick={() => setScanState({ kind: 'idle' })}>
                     Clear
+                  </Button>
+                </div>
+                <div className="mt-3 flex flex-col gap-2 sm:flex-row">
+                  <Input
+                    placeholder="Manual lookup by Unique ID (e.g. JMS-000001)"
+                    value={manualLookup}
+                    onChange={(e) => setManualLookup(e.target.value)}
+                  />
+                  <Button type="button" tone="ghost" onClick={manualOpen}>
+                    Open
                   </Button>
                 </div>
               </>
